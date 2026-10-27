@@ -6,6 +6,7 @@ Automation Library, with its full source and a walkthrough of how it works.
 | Bot | What it does | Published | Program | Video | Walkthrough |
 |---|---|---|---|---|---|
 | [CastManager](./CastManager) | Keeps a list of favorites, websites, local files, videos and movies, and casts the one you pick to a named Cast device. Tab or desktop. The browser runs on a hidden desktop, so the stream plays on the TV while your screen, mouse and keyboard stay yours. The list is saved as YAML through GPAL.Converter, and the first entry is loaded in the browser on startup so the first cast is instant. | 2026-10-19 | [Download](https://gpal.sditx.com/download/botw/castmanager) | [Watch](https://www.youtube.com/watch?v=qflCUNZxpH4) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-castmanager) |
+| [PageSpy](./PageSpy) | Navigate to any url and scan it. Every element found is grouped by type in a tree, each one showing its text, placeholder, value, link and css, so a selector can be read off a page rather than guessed at. The filter re-renders from what was already found, so narrowing costs nothing. | 2026-10-26 | [Download](https://gpal.sditx.com/download/botw/pagespy) | [Watch](https://www.youtube.com/watch?v=e9SHgeGr_Xc) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-pagespy) |
 
 ## Build
 
