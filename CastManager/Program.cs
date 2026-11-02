@@ -237,7 +237,7 @@ static class Program
 
         form.ShowDialog();
 
-        browser?.Close(true);
+        browser?.Close();
     }
 
     // ── Config load / save ────────────────────────────────────────────────────
@@ -414,7 +414,7 @@ static class Program
             castBtn.OnUiThread(() => _browserWatchdog.Start());
             SetStatus($"Casting \"{_selected.Title}\" to \"{device}\"...");
 
-            browser?.Close(true);
+            browser?.Close();
             browser = null;
 
             browser = GPAL.Browser

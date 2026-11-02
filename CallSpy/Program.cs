@@ -547,7 +547,7 @@ static class Program
 
         form.ShowDialog();
 
-        browser?.Close(true);
+        browser?.Close();
     }
 
     // The verdict cookies of Akamai, Cloudflare, DataDome and PerimeterX. A real profile keeps them, so one visit
@@ -632,7 +632,7 @@ static class Program
                     return;
                 }
 
-                browser?.Close(true);
+                browser?.Close();
 
                 SetStatus("Starting the browser...");
 
@@ -718,7 +718,7 @@ static class Program
             {
                 OnCollect(s, e);
 
-                browser?.Close(true);
+                browser?.Close();
                 browser = null;
 
                 refreshBtn.Enabled = false;
