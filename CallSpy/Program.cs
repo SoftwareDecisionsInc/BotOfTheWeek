@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using GenerallyPositive;
 using GenerallyPositive.Browser;
@@ -244,6 +245,55 @@ static class Program
         .WithCallback<EventHandler>(OnSendToSessionRelay)
         .ToGPALObject();
 
+    // the GPAL program that opens the page and makes the selected call from inside it
+    static GPALButton showCodeBtn = GPAL.Button
+        .WithEnabled(false)
+        .WithName("showCode")
+        .WithText("💻 Show Code")
+        .WithToolTip("The GPAL workflow that opens the page as this watch did and makes the selected call from inside it")
+        .WithCallback<EventHandler>(OnShowCode)
+        .ToGPALObject();
+
+    // -- Show Code ------------------------------------------------------------
+
+    static readonly string codeFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "code");
+
+    static GPALLabel codeHelp = GPAL.LabelFor(
+        "A console program that opens the page and makes this call from inside it, as Run Fetch does. Add the GPAL\n" +
+        "package to it; the answer is written to answer.txt in the folder it runs in.");
+
+    static GPALTextArea codeArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithHeight(470)
+        .WithName("code");
+
+    static GPALButton copyCodeBtn = GPAL.Button
+        .WithName("copyCode")
+        .WithText("📋 Copy")
+        .WithCallback<EventHandler>(OnCopyCode)
+        .ToGPALObject();
+
+    static GPALButton saveCodeBtn = GPAL.Button
+        .WithName("saveCode")
+        .WithText("💾 Save")
+        .WithToolTip("Writes the code to callspy-call.cs in the code folder beside CallSpy")
+        .WithCallback<EventHandler>(OnSaveCode)
+        .ToGPALObject();
+
+    // the default button closes the dialog
+    static GPALButton closeCodeBtn = GPAL.Button
+        .Default
+        .WithName("closeCode")
+        .WithText("Close")
+        .ToGPALObject();
+
+    // the browser the last watch started, which the code opens the page with
+    static BrowserType watchedBrowserType;
+    static AutomationEngine watchedEngine;
+    static string watchedProfile = string.Empty;
+    static string watchedUrl = string.Empty;
+    static bool watchedHeadless;
+
     static GPALButton copyAllBtn = GPAL.Button
         .WithEnabled(false)
         .WithName("copyAll")
@@ -467,6 +517,7 @@ static class Program
         .WithFormControl(copyHeadersBtn)
         .WithFormControl(copyAllBtn)
         .WithFormControl(handoffBtn)
+        .WithFormControl(showCodeBtn)
         .WithFormControl(GPAL.SplitRight)
         .WithFormControl(GPAL.LabelFor("Tidy the list:"))
         .WithFormControl(excludeBtn)
@@ -637,13 +688,14 @@ static class Program
                 SetStatus("Starting the browser...");
 
                 BrowserType browserType = browserTypes[Math.Max(0, browserCombo.SelectedIndex)];
+                AutomationEngine engine = engines[Math.Max(0, engineCombo.SelectedIndex)];
 
                 // Puppeteer reports its requests over CDP. Selenium has no such stream, so the page records for itself
                 // and sees only what its own script requested.
                 browser = GPAL.Browser
                     .WithBrowserType(browserType)
                     .WithUseStealth(StealthType.PatchDriver)
-                    .WithAutomationEngine(engines[Math.Max(0, engineCombo.SelectedIndex)])
+                    .WithAutomationEngine(engine)
                     .WithWaitOnDocumentReady(30_000)
                     .ToGPALObject();
 
@@ -653,6 +705,13 @@ static class Program
                     browser.WithProfileDataDirectory(profile);
 
                 VisitWithoutVerdicts(browser, browserType, url, true == headlessCheck.Checked);
+
+                // after the visit, so a watch that fails leaves the calls listed with the watch that made them
+                watchedBrowserType = browserType;
+                watchedEngine = engine;
+                watchedProfile = profile ?? string.Empty;
+                watchedUrl = url;
+                watchedHeadless = true == headlessCheck.Checked;
 
                 refreshBtn.Enabled = true;
                 stopBtn.Enabled = true;
@@ -874,6 +933,7 @@ static class Program
         copyHeadersBtn.Enabled = 0 < call.Headers.Count;
         copyAllBtn.Enabled = true;
         handoffBtn.Enabled = true;
+        showCodeBtn.Enabled = true;
         excludeBtn.Enabled = true;
         excludeDomainBtn.Enabled = true;
         fetchBtn.Enabled = null != browser;
@@ -1092,6 +1152,141 @@ static class Program
             retVal = retVal.Substring(0, 4_000) + $"{Environment.NewLine}...[{retVal.Length} characters in all]";
 
         return retVal;
+    }
+
+    // -- Show Code ------------------------------------------------------------
+
+    // The selected call as a console program that opens the page the way the watch did and makes the call from inside
+    // it, as Run Fetch does, with the headers the page sent. SessionRelay is where the two routes are compared
+    static void OnShowCode(object s, EventArgs e)
+    {
+        GPALCall call = Selected();
+
+        if (null != call)
+        {
+            bool post = "POST".Equals(call.Method, StringComparison.OrdinalIgnoreCase);
+            System.Text.StringBuilder code = new System.Text.StringBuilder();
+            string indent = "        ";
+
+            // a character that ends a line in C#, or any other control character, which neither a string nor a
+            // comment may hold as it is
+            bool Breaks(char c) => ' ' > c || (char)0x85 == c || (char)0x2028 == c || (char)0x2029 == c;
+
+            // A value as a C# string. Verbatim when it holds a backslash, a quote or line breaks, so a body of several
+            // lines reads as sent; a verbatim string may hold line breaks and tabs. Escaped character by character
+            // when it holds any other character that would end a line or cannot be seen
+            string Quoted(string value) => true == value.Any(c => true == Breaks(c) && '\r' != c && '\n' != c && '\t' != c)
+                ? "\"" + string.Concat(value.Select(c => true == Breaks(c) || '\\' == c || '"' == c ? $"\\u{(int)c:X4}" : c.ToString())) + "\""
+                : 0 <= value.IndexOfAny(new[] { '\\', '"', '\r', '\n', '\t' })
+                    ? "@\"" + value.Replace("\"", "\"\"") + "\""
+                    : "\"" + value + "\"";
+
+            // a value inside a // comment, with any character that would end the comment made a space
+            string Commented(string value) => string.Concat(value.Select(c => true == Breaks(c) ? " " : c.ToString()));
+
+            void Line(string text) => code.AppendLine(0 == text.Length ? string.Empty : indent + text);
+
+            List<string> headers = new List<string>();
+            foreach (KeyValuePair<string, string> header in call.Headers)
+                if (false == Array.Exists(browserOwned, owned => owned.Equals(header.Key, StringComparison.OrdinalIgnoreCase)))
+                    headers.Add($"{header.Key}: {header.Value}");
+
+            code.AppendLine($"// {(post ? "POST" : "GET")} {Commented(call.Url ?? string.Empty)}");
+            code.AppendLine($"// sent from inside the page, opened at {Commented(watchedUrl)}; a call made after clicking through to");
+            code.AppendLine("// another page may need that page opened instead");
+            code.AppendLine("// written by CallSpy, a GPAL Bot of the Week: https://gpal.sditx.com/docs/botw/botw-callspy");
+            code.AppendLine("// SessionRelay tries the same call outside the browser too: https://gpal.sditx.com/docs/botw/botw-sessionrelay");
+            code.AppendLine();
+            code.AppendLine("using System.IO;");
+            code.AppendLine("using GenerallyPositive;");
+            code.AppendLine("using GenerallyPositive.Browser;");
+            code.AppendLine("using static GenerallyPositive.Enums;");
+            code.AppendLine();
+            code.AppendLine("static class Program");
+            code.AppendLine("{");
+            code.AppendLine("    static void Main()");
+            code.AppendLine("    {");
+            Line("IBrowser browser = GPAL.Browser");
+            Line($"    .WithBrowserType(BrowserType.{watchedBrowserType})");
+            Line("    .WithUseStealth(StealthType.PatchDriver)");
+            Line($"    .WithAutomationEngine(AutomationEngine.{watchedEngine})");
+            Line("    .WithWaitOnDocumentReady(30_000)");
+            Line("    .ToGPALObject();");
+
+            if (0 < watchedProfile.Length)
+            {
+                Line(string.Empty);
+                Line("// a used profile loads like a returning visitor; a fresh one is what anti-bot systems look for");
+                Line($"browser.WithProfileDataDirectory({Quoted(watchedProfile)});");
+            }
+
+            Line(string.Empty);
+            Line(true == watchedHeadless ? "// the page that makes the call, opened with no window" : "// the page that makes the call");
+            Line($"browser.{(true == watchedHeadless ? "Get" : "GoTo")}({Quoted(watchedUrl)});");
+            Line(string.Empty);
+            Line("// The whole url, not the path: a page calls its own origin and others. Sent by the page, so it carries the");
+            Line("// browser's cookies, TLS fingerprint and header order");
+            Line("GPALRequest request = (GPALRequest)GPAL.Request");
+            Line($"    .WithPath({Quoted(call.Url ?? string.Empty)})");
+            Line($"    .WithHttpMethod(HttpVerb.{(post ? "Post" : "Get")}){(true == string.IsNullOrEmpty(call.PostData) ? ";" : string.Empty)}");
+            if (false == string.IsNullOrEmpty(call.PostData))
+                Line($"    .WithBody({Quoted(call.PostData)});");
+
+            if (0 < headers.Count)
+            {
+                Line(string.Empty);
+                Line("// the headers the page sent; the browser adds its own beneath them");
+                foreach (string header in headers)
+                    Line($"request.WithHeader({Quoted(header)});");
+            }
+
+            Line(string.Empty);
+            Line("string json = null;");
+            Line(string.Empty);
+            Line("browser");
+            Line("    .Fetch(request)");
+            Line("    .SaveTo(ref json);");
+            Line(string.Empty);
+            Line("// Fetch hands back a json array of bodies, one per page requested");
+            Line("File.WriteAllText(\"answer.txt\", json ?? string.Empty);");
+            Line(string.Empty);
+            Line("browser.Close();");
+            code.AppendLine("    }");
+            code.AppendLine("}");
+
+            codeArea.Text = code.ToString();
+
+            GPAL.Form
+                .WithTitle($"Show Code: {(post ? "POST" : "GET")} {PathOf(call.Url)}")
+                .WithWidth(760)
+                .WithFormControl(codeHelp)
+                .WithFormControl(codeArea)
+                .WithFormControl(copyCodeBtn)
+                .WithFormControl(saveCodeBtn)
+                .WithFormControl(closeCodeBtn)
+                .ShowDialog();
+        }
+        else
+            SetStatus("Pick a call first; Show Code writes the selected one.");
+    }
+
+    static void OnCopyCode(object s, EventArgs e)
+    {
+        GPAL.Clipboard
+            .WithInput(codeArea.Text)
+            .SetClipboard();
+
+        SetStatus("The code is on the clipboard.");
+    }
+
+    static void OnSaveCode(object s, EventArgs e)
+    {
+        string path = Path.Combine(codeFolder, "callspy-call.cs");
+
+        Directory.CreateDirectory(codeFolder);
+        File.WriteAllText(path, codeArea.Text);
+
+        SetStatus($"The code is saved to [{path}].");
     }
 
     // The captured call, written where SessionRelay picks it up. Headers included, minus the ones the browser owns, so

@@ -10,6 +10,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using GenerallyPositive;
 using GenerallyPositive.Browser;
@@ -87,12 +88,27 @@ static class Program
 
     static GPALInput deviceInput = GPAL.Input
         .WithName("deviceInput")
+        .WithCallback<EventHandler>((s, e) => ShowCode()).ForEvent(ControlEventType.TextChanged)
         .ToGPALObject();
 
     static GPALComboBox castModeCombo = GPAL.ComboBox
         .WithItems("Cast Tab", "Cast Desktop")
         .WithSelectedIndex(0)
         .WithName("castMode")
+        .WithCallback<EventHandler>((s, e) => ShowCode())
+        .ToGPALObject();
+
+    // the GPAL code that casts the selected favorite, to use in a program of your own
+    static GPALTextArea codeArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithHeight(110)
+        .WithName("code");
+
+    static GPALButton copyCodeBtn = GPAL.Button
+        .WithEnabled(false)
+        .WithName("copyCode")
+        .WithText("📋 Copy Code")
+        .WithCallback<EventHandler>(OnCopyCode)
         .ToGPALObject();
 
     // Casting needs Chrome's own Cast commands, which PuppeteerPort and Selenium have and OttoMagic does not.
@@ -110,7 +126,12 @@ static class Program
         .ToGPALObject();
 
     // the browser runs on a Windows desktop of its own, so it casts without appearing on the screen you work on
-    static GPALCheckbox hiddenDesktopCheck = GPAL.CheckboxFor("Hidden desktop", true);
+    static GPALCheckbox hiddenDesktopCheck = (GPALCheckbox)GPAL.Checkbox
+        .WithChecked(true)
+        .WithText("Hidden desktop")
+        .WithName("hiddenDesktop")
+        .WithCallback<EventHandler>((s, e) => ShowCode()).ForEvent(ControlEventType.CheckedChanged)
+        .ToGPALObject();
 
     static GPALButton loadBtn = GPAL.Button
         .WithName("load")
@@ -197,6 +218,9 @@ static class Program
         .WithFormControl(removeBtn)
         .WithFormControl(GPAL.LabelFor("Saved Favorites:"))
         .WithFormControl(urlList)
+        .WithFormControl(GPAL.LabelFor("The GPAL code that casts it:"))
+        .WithFormControl(codeArea)
+        .WithFormControl(copyCodeBtn)
         .WithFormControl(GPAL.SplitRight)
         .WithFormControl(GPAL.LabelFor("Cast Device Name:"))
         .WithFormControl(deviceInput)
@@ -229,7 +253,7 @@ static class Program
         var form = GPAL.Form
             .WithTitle("CastManager  |  A GPAL Bot of the Week")
             .WithWidth(700)
-            .WithHeight(550)
+            .WithHeight(720)
             .WithFormControl(favouritesAndCasting)
             .WithFormControl(statusBar);
 
@@ -304,9 +328,62 @@ static class Program
         _selected         = idx < _config.Entries.Count ? _config.Entries[idx] : null;
         removeBtn.Enabled = _selected != null;
         UpdateCastButton();
+        ShowCode();
         if (_selected == null) return;
         titleInput.Text = _selected.Title;
         urlInput.SetPath(_selected.Url);
+    }
+
+    // ── The code for the selected favorite ────────────────────────────────────
+
+    // The lines that open the selected favorite and cast it as the form is set: the device, the cast mode, the hidden
+    // desktop, and the browser and engine the cast runs on. Nothing selected shows nothing
+    static void ShowCode()
+    {
+        string code = string.Empty;
+
+        if (null != _selected)
+        {
+            // a character that ends a line in C#, or any other control character, which a string may not hold as it is
+            bool Breaks(char c) => ' ' > c || (char)0x85 == c || (char)0x2028 == c || (char)0x2029 == c;
+
+            // a value as a C# string: verbatim when it holds a backslash or a quote, escaped when it holds a
+            // character that would end the line
+            string Quoted(string value) => true == value.Any(Breaks)
+                ? "\"" + string.Concat(value.Select(c => true == Breaks(c) || '\\' == c || '"' == c ? $"\\u{(int)c:X4}" : c.ToString())) + "\""
+                : 0 <= value.IndexOfAny(new[] { '\\', '"' })
+                    ? "@\"" + value.Replace("\"", "\"\"") + "\""
+                    : "\"" + value + "\"";
+
+            string device = deviceInput.Text?.Trim() ?? string.Empty;
+
+            code = string.Join(Environment.NewLine, new[]
+            {
+                "IBrowser browser = GPAL.Browser",
+                $"    .WithBrowserType(BrowserType.{(1 == browserCombo.SelectedIndex ? "Edge" : "Chrome")})",
+                $"    .WithAutomationEngine(AutomationEngine.{(1 == engineCombo.SelectedIndex ? "Selenium" : "PuppeteerPort")})",
+                "    .WithUseStealth(StealthType.PatchDriver)",
+                $"    .WithHiddenDesktop({(true == hiddenDesktopCheck.Checked ? "true" : "false")})",
+                "    .ToGPALObject();",
+                string.Empty,
+                $"browser.GoTo({Quoted(ToTarget(_selected.Url))});",
+                $"browser.{(1 == castModeCombo.SelectedIndex ? "CastDesktop" : "CastTab")}({Quoted(0 == device.Length ? "<your Cast device name>" : device)});"
+            });
+        }
+
+        codeArea.Text = code;
+        copyCodeBtn.Enabled = 0 < code.Length;
+    }
+
+    static void OnCopyCode(object s, EventArgs e)
+    {
+        ShowCode();
+
+        GPAL.Clipboard
+            .WithInput(codeArea.Text)
+            .SetClipboard();
+
+        SetStatus("The code is on the clipboard.");
     }
 
     static void OnAdd(object s, EventArgs e)
@@ -336,6 +413,7 @@ static class Program
         _selected         = null;
         removeBtn.Enabled = false;
         RefreshList();
+        ShowCode();
     }
 
     static void OnLoad(object s, EventArgs e)

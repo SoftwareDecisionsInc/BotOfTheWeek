@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using GenerallyPositive;
 using GenerallyPositive.Browser;
@@ -69,6 +70,23 @@ class Target
     public string ContentType { get; set; }
     public string Body { get; set; }
     public string Headers { get; set; }
+}
+
+// -- One run as it was made, for Show Code --
+
+class RunRecord
+{
+    public string Route { get; set; }
+    public string PageUrl { get; set; }
+    public string ApiPath { get; set; }
+    public bool Post { get; set; }
+    public bool Form { get; set; }
+    public string Body { get; set; }
+    public List<string> Headers { get; set; }
+    public BrowserType BrowserType { get; set; }
+    public AutomationEngine Engine { get; set; }
+    public string Profile { get; set; }
+    public bool Headless { get; set; }
 }
 
 static class Program
@@ -371,6 +389,59 @@ static class Program
         .WithCallback<EventHandler>(OnAbout)
         .ToGPALObject();
 
+    static GPALButton showCodeBtn = GPAL.Button
+        .WithName("showCode")
+        .WithText("💻 Show Code")
+        .WithToolTip("The GPAL workflow that makes the selected run's call, or the last run's, to use in a program of your own")
+        .WithCallback<EventHandler>(OnShowCode)
+        .ToGPALObject();
+
+    // -- Show Code ------------------------------------------------------------
+
+    static readonly string codeFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "code");
+
+    static GPALLabel codeHelp = GPAL.LabelFor(
+        "A console program that earns the session and makes this run's call the same way. Add the GPAL package\n" +
+        "to it; the answer is written to answer.txt in the folder it runs in.");
+
+    static GPALTextArea codeArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithHeight(470)
+        .WithName("code");
+
+    static GPALButton copyCodeBtn = GPAL.Button
+        .WithName("copyCode")
+        .WithText("📋 Copy")
+        .WithCallback<EventHandler>(OnCopyCode)
+        .ToGPALObject();
+
+    static GPALButton saveCodeBtn = GPAL.Button
+        .WithName("saveCode")
+        .WithText("💾 Save")
+        .WithToolTip("Writes the code to a .cs file in the code folder beside SessionRelay")
+        .WithCallback<EventHandler>(OnSaveCode)
+        .ToGPALObject();
+
+    // the default button closes the dialog
+    static GPALButton closeCodeBtn = GPAL.Button
+        .Default
+        .WithName("closeCode")
+        .WithText("Close")
+        .ToGPALObject();
+
+    // the browser the session was started with, for the runs made against it
+    static BrowserType sessionBrowserType;
+    static AutomationEngine sessionEngine;
+    static string sessionProfile = string.Empty;
+    static bool sessionHeadless;
+    static string sessionPageUrl = string.Empty;
+
+    // every run as it was made, in step with the rows of runList
+    static List<RunRecord> runRecords = new List<RunRecord>();
+
+    // the route of the code in the dialog, for the file name Save gives it
+    static string codeRoute = string.Empty;
+
     // -- About ----------------------------------------------------------------
 
     static GPALLabel aboutText = (GPALLabel)GPAL.LabelFor(
@@ -467,6 +538,7 @@ static class Program
             .WithFormControl(runsTab)
             .WithFormControl(fetchBtn)
             .WithFormControl(restBtn)
+            .WithFormControl(showCodeBtn)
             .WithFormControl(GPAL.LabelFor("Runs against this session:"))
             .WithFormControl(runList)
             .WithFormControl(GPAL.LabelFor("Response:"))
@@ -726,6 +798,12 @@ static class Program
 
                 if (false == string.IsNullOrEmpty(profile))
                     browser.WithProfileDataDirectory(profile);
+
+                sessionBrowserType = browserType;
+                sessionEngine = engine;
+                sessionProfile = profile;
+                sessionHeadless = true == headlessCheck.Checked;
+                sessionPageUrl = pageUrlInput.Text.Trim();
 
                 // Said before the run, not after it finds nothing. Selenium records inside the page, so it has the
                 // calls but not the headers the browser adds on the way out.
@@ -999,6 +1077,21 @@ static class Program
 
         bodies.Add(body ?? string.Empty);
 
+        runRecords.Add(new RunRecord
+        {
+            Route = route,
+            PageUrl = sessionPageUrl,
+            ApiPath = apiPathInput.Text?.Trim() ?? string.Empty,
+            Post = 1 == methodCombo.SelectedIndex,
+            Form = 1 == contentTypeCombo.SelectedIndex,
+            Body = bodyArea.Text ?? string.Empty,
+            Headers = HeaderLines(),
+            BrowserType = sessionBrowserType,
+            Engine = sessionEngine,
+            Profile = sessionProfile,
+            Headless = sessionHeadless
+        });
+
         runList.AddItem(route, method, apiPathInput.Text?.Trim(), status, (body?.Length ?? 0).ToString(), elapsed.TotalSeconds.ToString("0.00"));
 
         responseArea.Text = Shortened(body);
@@ -1024,6 +1117,173 @@ static class Program
             retVal = retVal.Substring(0, 4000) + $"{Environment.NewLine}...[{retVal.Length} characters in all]";
 
         return retVal;
+    }
+
+    // -- Show Code ------------------------------------------------------------
+
+    // The selected run, or the last one, as a console program that earns the session as Start Session does and makes
+    // the call the way that run's route made it, shown in a dialog to copy or save
+    static void OnShowCode(object s, EventArgs e)
+    {
+        int index = 0 <= runList.SelectedIndex && runList.SelectedIndex < runRecords.Count ? runList.SelectedIndex : runRecords.Count - 1;
+
+        if (0 <= index)
+        {
+            RunRecord run = runRecords[index];
+            bool fetch = "Fetch" == run.Route;
+            System.Text.StringBuilder code = new System.Text.StringBuilder();
+            string indent = "        ";
+
+            // a character that ends a line in C#, or any other control character, which neither a string nor a
+            // comment may hold as it is
+            bool Breaks(char c) => ' ' > c || (char)0x85 == c || (char)0x2028 == c || (char)0x2029 == c;
+
+            // A value as a C# string. Verbatim when it holds a backslash, a quote or line breaks, so a path or a json body
+            // of several lines reads as typed; a verbatim string may hold line breaks and tabs. Escaped character by
+            // character when it holds any other character that would end a line or cannot be seen
+            string Quoted(string value) => true == value.Any(c => true == Breaks(c) && '\r' != c && '\n' != c && '\t' != c)
+                ? "\"" + string.Concat(value.Select(c => true == Breaks(c) || '\\' == c || '"' == c ? $"\\u{(int)c:X4}" : c.ToString())) + "\""
+                : 0 <= value.IndexOfAny(new[] { '\\', '"', '\r', '\n', '\t' })
+                    ? "@\"" + value.Replace("\"", "\"\"") + "\""
+                    : "\"" + value + "\"";
+
+            // a value inside a // comment, with any character that would end the comment made a space
+            string Commented(string value) => string.Concat(value.Select(c => true == Breaks(c) ? " " : c.ToString()));
+
+            void Line(string text) => code.AppendLine(0 == text.Length ? string.Empty : indent + text);
+
+            code.AppendLine($"// {(run.Post ? "POST" : "GET")} {Commented(run.ApiPath)}");
+            code.AppendLine($"// on a session earned at {Commented(run.PageUrl)}, by the {(fetch ? "in-page Fetch" : "REST handoff")} route");
+            code.AppendLine("// written by SessionRelay, a GPAL Bot of the Week: https://gpal.sditx.com/docs/botw/botw-sessionrelay");
+            code.AppendLine();
+            code.AppendLine("using System;");
+            code.AppendLine("using System.IO;");
+            code.AppendLine("using GenerallyPositive;");
+            code.AppendLine("using GenerallyPositive.Browser;");
+            code.AppendLine("using static GenerallyPositive.Enums;");
+            code.AppendLine();
+            code.AppendLine("static class Program");
+            code.AppendLine("{");
+            code.AppendLine("    static void Main()");
+            code.AppendLine("    {");
+            Line("IBrowser browser = GPAL.Browser");
+            Line($"    .WithBrowserType(BrowserType.{run.BrowserType})");
+            Line($"    .WithAutomationEngine(AutomationEngine.{run.Engine})");
+            Line("    .WithUseStealth(StealthType.PatchDriver)");
+            Line("    .WithWaitOnDocumentReady(30_000)      // the session is only earned once the page settles");
+            Line("    .ToGPALObject();");
+
+            if (0 < run.Profile.Length)
+            {
+                Line(string.Empty);
+                Line("// a used profile loads like a returning visitor; a fresh one is what anti-bot systems look for");
+                Line($"browser.WithProfileDataDirectory({Quoted(run.Profile)});");
+            }
+
+            Line(string.Empty);
+            Line(true == run.Headless ? "// the page that earns the session, opened with no window" : "// the page that earns the session");
+            Line($"browser.{(true == run.Headless ? "Get" : "GoTo")}({Quoted(run.PageUrl)});");
+            Line(string.Empty);
+
+            if (true == fetch)
+            {
+                Line("// the page makes the call, over the browser's own connection, so it carries the cookies, the TLS");
+                Line("// fingerprint and the header order");
+                Line("GPALRequest request = (GPALRequest)GPAL.Request");
+                Line($"    .WithPath({Quoted(run.ApiPath)})");
+                Line($"    .WithHttpMethod(HttpVerb.{(run.Post ? "Post" : "Get")})");
+                Line($"    .WithContentType(ContentType.{(run.Form ? "Form" : "Json")}){(0 == run.Body.Length ? ";" : string.Empty)}");
+                if (0 < run.Body.Length)
+                    Line($"    .WithBody({Quoted(run.Body)});");
+
+                if (0 < run.Headers.Count)
+                {
+                    Line(string.Empty);
+                    Line("// the headers the page sends; the browser adds its own beneath them");
+                    foreach (string header in run.Headers)
+                        Line($"request.WithHeader({Quoted(header)});");
+                }
+
+                Line(string.Empty);
+                Line("string json = null;");
+                Line(string.Empty);
+                Line("browser");
+                Line("    .Fetch(request)");
+                Line("    .SaveTo(ref json);");
+                Line(string.Empty);
+                Line("// Fetch hands back a json array of bodies, one per page requested");
+                Line("File.WriteAllText(\"answer.txt\", json ?? string.Empty);");
+            }
+            else
+            {
+                Line("// the session leaves the browser: its cookies, user agent and accept-language go to a REST client");
+                Line("browser.ContinueAsRESTClient(out IRESTClient client);");
+                Line(string.Empty);
+                Line("// a site that fingerprints the transport takes the connection and never answers");
+                Line("client.WithTimeout(TimeSpan.FromSeconds(15));");
+
+                if (0 < run.Headers.Count)
+                {
+                    Line(string.Empty);
+                    Line("// the headers the page sends");
+                    foreach (string header in run.Headers)
+                    {
+                        int colon = header.IndexOf(':');
+                        Line($"client.WithHeader({Quoted(header.Substring(0, colon).Trim())}, {Quoted(header.Substring(colon + 1).Trim())});");
+                    }
+                }
+
+                Line(string.Empty);
+                Line("string body = client");
+                Line($"    .WithEndpoint({Quoted(run.ApiPath)})");
+                if (true == run.Post)
+                    Line($"    .WithParameters({Quoted(run.Body)})");
+                Line($"    .WithHttpMethod(\"{(run.Post ? "POST" : "GET")}\")");
+                Line("    .Execute(false);");
+                Line(string.Empty);
+                Line("// the status code first: on a protected site 200 is through and 403 is the wall");
+                Line("File.WriteAllText(\"answer.txt\", ((RESTClient)client).StatusCode + Environment.NewLine + body);");
+            }
+
+            Line(string.Empty);
+            Line("browser.Close();");
+            code.AppendLine("    }");
+            code.AppendLine("}");
+
+            codeArea.Text = code.ToString();
+            codeRoute = fetch ? "fetch" : "rest-handoff";
+
+            GPAL.Form
+                .WithTitle($"Show Code: {run.Route}, {(run.Post ? "POST" : "GET")} {run.ApiPath}")
+                .WithWidth(760)
+                .WithFormControl(codeHelp)
+                .WithFormControl(codeArea)
+                .WithFormControl(copyCodeBtn)
+                .WithFormControl(saveCodeBtn)
+                .WithFormControl(closeCodeBtn)
+                .ShowDialog();
+        }
+        else
+            SetStatus("Run Fetch or the REST handoff first; Show Code writes the call a run made.");
+    }
+
+    static void OnCopyCode(object s, EventArgs e)
+    {
+        GPAL.Clipboard
+            .WithInput(codeArea.Text)
+            .SetClipboard();
+
+        SetStatus("The code is on the clipboard.");
+    }
+
+    static void OnSaveCode(object s, EventArgs e)
+    {
+        string path = Path.Combine(codeFolder, $"sessionrelay-{codeRoute}.cs");
+
+        Directory.CreateDirectory(codeFolder);
+        File.WriteAllText(path, codeArea.Text);
+
+        SetStatus($"The code is saved to [{path}].");
     }
 
     static void OnAbout(object s, EventArgs e)
