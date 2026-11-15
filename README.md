@@ -13,7 +13,7 @@ Automation Library, with its full source and a walkthrough of how it works.
 ## Build
 
 Open `BotOfTheWeek.sln` in Visual Studio 2022 (.NET Framework 4.8) and build. Every bot builds against the GPAL
-package on nuget.org, version 1.0.2, which Visual Studio restores the first time. Each bot also opens on its
+package on nuget.org, version 1.1.0, which Visual Studio restores the first time. Each bot also opens on its
 own through its project file.
 
 The Program link is each bot ready to run: unzip anywhere and start its exe, signed by Software Decisions, Inc.
