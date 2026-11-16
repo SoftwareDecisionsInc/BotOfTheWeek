@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CallSpy", "CallSpy\CallSpy.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SessionRelay", "SessionRelay\SessionRelay.csproj", "{3D6A1C88-42F7-4B95-9E30-5C8B7A2D4E19}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InboxWatcher", "InboxWatcher\InboxWatcher.csproj", "{EBA1CD92-F1F1-412D-B3CF-2CE32072628F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{3D6A1C88-42F7-4B95-9E30-5C8B7A2D4E19}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3D6A1C88-42F7-4B95-9E30-5C8B7A2D4E19}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3D6A1C88-42F7-4B95-9E30-5C8B7A2D4E19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EBA1CD92-F1F1-412D-B3CF-2CE32072628F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EBA1CD92-F1F1-412D-B3CF-2CE32072628F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EBA1CD92-F1F1-412D-B3CF-2CE32072628F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EBA1CD92-F1F1-412D-B3CF-2CE32072628F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
