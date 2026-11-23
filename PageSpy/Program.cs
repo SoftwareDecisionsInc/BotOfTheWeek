@@ -4,7 +4,7 @@
 // Navigate to any URL and scan for elements. Results are grouped by element
 // type in a TreeView. Each child node shows: [text] [placeholder] [value] [href/src/attr] [css]
 // Filter combobox re-renders the tree in real-time from stored results.
-// URL history auto-saved to pagespy-history.txt next to the exe (max 20).
+// URL history auto-saved to pagespy-history.yaml next to the exe (max 20).
 // "Hide Browser" uses Get (headless) instead of GoTo; checked by default.
 // =============================================================================
 
@@ -133,6 +133,46 @@ static class Program
         .WithWidth(50)
         .ToGPALObject();
 
+    // ── Tabs ──────────────────────────────────────────────────────────────────
+
+    static GPALTab scanTab = GPAL.Tab.WithName("scanTab").WithText("Scan").ToGPALObject();
+    static GPALTab howToTab = GPAL.Tab.WithName("howToTab").WithText("How To").ToGPALObject();
+
+    // The steps, so the bot explains itself.
+    static readonly string[] instructions =
+    {
+        "PageSpy tells you what is on a page: its links, images, inputs, buttons and forms.",
+        "CallSpy tells you what a page asks for.",
+        "",
+        "1.  Type a URL and press Scan. Chrome loads the page and PageSpy reads every link, image,",
+        "    input, button and form on it. The browser stays open for the next scan.",
+        "",
+        "2.  Hide Browser, on to start with, loads the page without showing the browser. Turn it",
+        "    off to watch the page load in a browser window; the scan then waits two more seconds",
+        "    before it reads the page. It counts when the browser opens, on the first scan: the",
+        "    later scans reuse that browser, hidden or not.",
+        "",
+        "3.  The results land on the right, one group per type with its count. Each line holds,",
+        "    in brackets and leaving out any that are empty:",
+        "",
+        "        the element's text",
+        "        its placeholder",
+        "        its value",
+        "        the href of a link, the src of an image, the name of an input, the action of a form",
+        "        its CSS selector, which is what to put in GPAL.Selector.WithCSS to reach it",
+        "",
+        "4.  Filter shows one type, or All. It redraws from the last scan without loading the",
+        "    page again.",
+        "",
+        "5.  Every URL scanned goes to the top of the list under the URL box, the last 20 kept in",
+        "    pagespy-history.yaml beside the exe. Click one to put it in the URL box, or",
+        "    double-click it to scan it. Delete removes the selected one; Clear All empties the list."
+    };
+
+    static GPALTextArea instructionArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithName("instructions");
+
     // ── Entry point ───────────────────────────────────────────────────────────
 
     static GPALSplitter controlsAndResults = (GPALSplitter)GPAL.Splitter.HSplit(0.25)
@@ -164,11 +204,17 @@ static class Program
         var form = GPAL.Form
             .WithTitle("PageSpy")
             .WithWidth(1000)
-            .WithHeight(466)
+            .WithHeight(500)
+            .WithFormControl(scanTab)
             .WithFormControl(controlsAndResults)
+
+            .WithFormControl(howToTab)
+            .WithFormControl(instructionArea)
             .Show();
 
         LoadHistory();
+
+        instructionArea.Text = string.Join(Environment.NewLine, instructions);
 
         form.ShowDialog();
     }

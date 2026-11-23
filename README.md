@@ -10,13 +10,14 @@ Automation Library, with its full source and a walkthrough of how it works.
 | [CallSpy](./CallSpy) | PageSpy's sibling. PageSpy tells you what is on a page; CallSpy tells you what the page asks for. Every request the browser makes is recorded with its method, url, type, body and headers. Filter to XHR and Fetch and you are looking at the site's own API. | 2026-11-02 | [Download](https://gpal.sditx.com/download/botw/callspy) | [Watch](https://www.youtube.com/watch?v=m-aUReoPQWo) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-callspy) |
 | [SessionRelay](./SessionRelay) | Earn a session in a browser, then call the site's own API with it. GPAL does that two ways, in the page and outside it, and this bot runs both against the same session so you can see which wall you are at rather than guessing. | 2026-11-09 | [Download](https://gpal.sditx.com/download/botw/sessionrelay) | [Watch](https://www.youtube.com/watch?v=bfNSq52LYZs) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-sessionrelay) |
 | [InboxWatcher](./InboxWatcher) | Watches a mailbox and does the work its mail asks for. Each rule names the mail it wants by sender, subject and attachment, then saves the attachments, takes files out of an archive, converts them, and posts to Slack, Teams or any webhook when it is done. | 2026-11-16 | [Download](https://gpal.sditx.com/download/botw/inboxwatcher) | [Watch](https://www.youtube.com/playlist?list=PLNAxd-4mdRs_272uxvAetn6EWT8CENurF) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-inboxwatcher) |
+| [ChannelManager](./ChannelManager) | Lists every video and playlist on each YouTube channel you run, and replaces a video with a new file while keeping its title, description, tags, category, privacy, thumbnail and its place in every playlist. Uploads new videos, with titles and descriptions an AI can write. Adds to and removes from playlists, clears deleted videos out of them, deletes, exports each video's chapters, and exports the list in six formats. | 2026-11-23 | [Download](https://gpal.sditx.com/download/botw/channelmanager) | [Watch](https://www.youtube.com/playlist?list=PLNAxd-4mdRs_272uxvAetn6EWT8CENurF) | [Walkthrough](https://gpal.sditx.com/docs/botw/botw-channelmanager) |
 
 ## Build
 
 Open `BotOfTheWeek.sln` in Visual Studio 2026, or run `dotnet build` in this folder with the .NET 10 SDK. The
 projects are SDK-style and build both .NET Framework 4.8 and .NET 10, each into its own folder under bin; Visual
 Studio 2022 cannot build the .NET 10 half. The released exes are the 4.8 build, so they run on any Windows 10/11
-without installing .NET. Every bot builds against the GPAL package on nuget.org, version 1.1.0, which
+without installing .NET. Every bot builds against the GPAL package on nuget.org, version 1.1.2, which
 carries both builds and is restored the first time. Each bot also opens on its own through its project file.
 
 The Program link is each bot ready to run: unzip anywhere and start its exe, signed by Software Decisions, Inc.

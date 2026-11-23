@@ -52,7 +52,7 @@
 
   <ItemGroup>
     <PackageReference Include="GPAL">
-      <Version>1.1.0</Version>
+      <Version>1.1.2</Version>
     </PackageReference>
   </ItemGroup>
 </Project>

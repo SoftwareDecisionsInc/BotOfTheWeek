@@ -9,7 +9,7 @@
 // inboxwatcher.yaml through GPAL.Converter, the servers in GPALMail.yaml by
 // the mail object's SaveSettings, and "Get Test Account" fetches a throwaway
 // Ethereal account so the bot runs with nothing set up. Send Test Message
-// mails it a zip of two csv files, which the sample rule turns into json.
+// mails it a zip of two csv files, which the sample rule turns into json and html.
 // =============================================================================
 
 using System;
@@ -117,6 +117,76 @@ static class Program
     static GPALTab watchTab = GPAL.Tab.WithName("watchTab").WithText("Watch").ToGPALObject();
     static GPALTab rulesTab = GPAL.Tab.WithName("rulesTab").WithText("Rules").ToGPALObject();
     static GPALTab accountTab = GPAL.Tab.WithName("accountTab").WithText("Account").ToGPALObject();
+    static GPALTab howToTab = GPAL.Tab.WithName("howToTab").WithText("How To").ToGPALObject();
+
+    // The steps, so the bot explains itself.
+    static readonly string[] instructions =
+    {
+        "InboxWatcher reads a mailbox and does the work its mail asks for: it saves the attachments,",
+        "takes files out of an archive, converts them, and posts to a webhook when it is done.",
+        "",
+        "1.  Account tab. The IMAP server and port it reads from, the SMTP server and port Send",
+        "    Test Message sends through, your username and your password. Save Account writes",
+        "    the servers to GPALMail.yaml in the folder InboxWatcher starts in, normally beside",
+        "    this exe. The password is never written there,",
+        "    so type it in each time InboxWatcher starts.",
+        "",
+        "    No account to try it on? Get Test Account asks Ethereal for a throwaway mailbox and",
+        "    fills in the tab. It is kept in ethereal-account.yaml beside this exe for next time.",
+        "    Ethereal delivers nothing outside itself, so its password protects nothing.",
+        "",
+        "2.  Rules tab. A rule names the mail it wants and says what to do with it:",
+        "",
+        "        From contains      part of the sender's address; empty is any sender",
+        "        Subject contains   part of the subject; empty is any subject",
+        "        Attachments        such as *.zip or report*.csv; empty takes every message the",
+        "                           sender and subject match",
+        "        Take out of each   such as *.csv, for an attachment that is an archive; empty",
+        "        archive            keeps each attachment as it is",
+        "        Convert to         each format ticked is written beside each file; none ticked",
+        "                           leaves the files as they came",
+        "        Save into          a folder for each message goes under it, named for when the",
+        "                           message arrived and its subject, holding every attachment",
+        "",
+        "    Tick The first line of each file names the columns when it does, so each row",
+        "    becomes an object with those names.",
+        "",
+        "    Add makes a new rule from the fields. Pick a rule in the list to load it into the",
+        "    fields; Update changes it to what the fields hold, and Remove takes it out. Save",
+        "    Rules writes the rules to inboxwatcher.yaml beside this exe, and so does Start",
+        "    Watching; until one of them is pressed a change lasts only this run.",
+        "",
+        "    The first rule that matches an unread message handles it. Mail no rule matches",
+        "    stays unread.",
+        "",
+        "    Show Code writes the rule in the fields as a console program of its own, to copy,",
+        "    or to save as a .cs file in the code folder beside this exe.",
+        "",
+        "3.  Watch tab. Check Now reads the newest fifty unread messages once. Start Watching",
+        "    checks, waits the minutes set, and checks again, until Stop.",
+        "",
+        "    A message is marked read only after its rule has run. One that fails is left",
+        "    unread for you to look at, and skipped until InboxWatcher is started again.",
+        "",
+        "    Every message a rule took lands in the list, a failed one marked so. Double-click a",
+        "    row to open its folder.",
+        "",
+        "4.  To hear when a rule has run, put a Slack, Teams, Discord or other webhook in a user",
+        "    environment variable and type the variable's name on the Watch tab. The webhook",
+        "    itself is never saved or shown.",
+        "",
+        "",
+        "To try it with nothing set up: Get Test Account, then Send Test Message, then Check Now.",
+        "The test message carries a zip of two csv files. On a first run the sample rule, Daily",
+        "export, is already there, and turns them into json and html in the inbox folder beside",
+        "this exe."
+    };
+
+    // the steps, filled in when the form is built
+    static GPALTextArea instructionArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithHeight(740)
+        .WithName("instructions");
 
     // -- Watch ----------------------------------------------------------------
 
@@ -377,7 +447,7 @@ static class Program
             .WithTitle("InboxWatcher  |  A GPAL Bot of the Week")
             .WithTop(10)
             .WithWidth(720)
-            .WithHeight(870)
+            .WithHeight(880)
 
             .WithFormControl(watchTab)
             .WithFormControl(GPAL.LabelFor("Check every (minutes):"))
@@ -433,10 +503,15 @@ static class Program
             .WithFormControl(GPAL.LabelFor("No account? Take a throwaway one from Ethereal, kept for next time:"))
             .WithFormControl(testAccountBtn)
 
+            .WithFormControl(howToTab)
+            .WithFormControl(instructionArea)
+
             .WithFormControl(statusBar);
 
         LoadSettings();
         LoadAccount();
+
+        instructionArea.Text = string.Join(Environment.NewLine, instructions);
 
         form.ShowDialog();
 

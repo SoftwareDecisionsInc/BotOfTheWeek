@@ -4,7 +4,6 @@
 // A GPALForm that manages a saved list of favorites (websites, local files,
 // videos, movies) and casts the selected one to a named Cast device. Supports
 // tab and desktop casting. Config is persisted as YAML via GPAL.Converter.
-// The first entry is preloaded in the browser on startup for instant casting.
 // =============================================================================
 
 using System;
@@ -207,6 +206,54 @@ static class Program
         .WithName("status")
         .ToGPALObject();
 
+    // ── Tabs ──────────────────────────────────────────────────────────────────
+
+    static GPALTab castTab = GPAL.Tab.WithName("castTab").WithText("Cast").ToGPALObject();
+    static GPALTab howToTab = GPAL.Tab.WithName("howToTab").WithText("How To").ToGPALObject();
+
+    // The steps, so the bot explains itself.
+    static readonly string[] instructions =
+    {
+        "CastManager casts a web page, a video or a local file to a Google Cast device, such as",
+        "a TV, from a list of favorites you keep.",
+        "",
+        "1.  Cast Device Name: the name of the device you cast to, as it appears in Chrome's",
+        "    Cast menu, such as Living Room TV.",
+        "",
+        "2.  Add a favorite: type a Title, then paste a URL or browse for a local file, and press",
+        "    Add. A title is required. A URL already in the list is not added twice. A local file",
+        "    is opened in the browser as a file:/// address. Press Save to keep it; the list is",
+        "    not saved on its own.",
+        "",
+        "3.  Select a favorite. Its title and URL fill the boxes above, and the GPAL code that casts",
+        "    it, as the form is set, appears below the list. Copy Code puts that code on the",
+        "    clipboard for a program of your own. Remove takes the selected favorite out of the list,",
+        "    which also lasts only until you press Save.",
+        "",
+        "4.  Cast Mode: Cast Tab casts the tab the favorite is open in. Cast Desktop casts the",
+        "    desktop instead of one tab.",
+        "",
+        "5.  Hidden desktop, on to start with, runs the browser on a Windows desktop of its own,",
+        "    so it casts without appearing on the screen you work on.",
+        "",
+        "6.  Press Cast, or double-click a favorite. Chrome opens, loads the favorite and casts",
+        "    it. While it casts, Cast is greyed out; double-click another favorite and the same",
+        "    browser goes to it and casts it, with no restart.",
+        "",
+        "7.  Peek shows the hidden desktop for a minute, or until you press Escape or its Return",
+        "    button, long enough to set a video to full screen.",
+        "",
+        "8.  Stop Casting closes the browser. If the browser closes on its own, casting stops too.",
+        "",
+        "9.  Save writes the favorites, the device name and the cast mode to a YAML file; Load",
+        "    reads one back. Both start on cast-urls.yaml beside the exe, which is the file read",
+        "    when CastManager starts."
+    };
+
+    static GPALTextArea instructionArea = (GPALTextArea)GPAL.TextArea
+        .WithReadOnly(true)
+        .WithName("instructions");
+
     // ── Entry point ───────────────────────────────────────────────────────────
 
     static GPALSplitter favouritesAndCasting = (GPALSplitter)GPAL.Splitter.HSplit(.80)
@@ -253,11 +300,18 @@ static class Program
         var form = GPAL.Form
             .WithTitle("CastManager  |  A GPAL Bot of the Week")
             .WithWidth(700)
-            .WithHeight(720)
+            .WithHeight(760)
+            .WithFormControl(castTab)
             .WithFormControl(favouritesAndCasting)
+
+            .WithFormControl(howToTab)
+            .WithFormControl(instructionArea)
+
             .WithFormControl(statusBar);
 
         LoadConfig();
+
+        instructionArea.Text = string.Join(Environment.NewLine, instructions);
 
         form.ShowDialog();
 
