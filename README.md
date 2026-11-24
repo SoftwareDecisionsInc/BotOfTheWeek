@@ -17,7 +17,7 @@ Automation Library, with its full source and a walkthrough of how it works.
 Open `BotOfTheWeek.sln` in Visual Studio 2026, or run `dotnet build` in this folder with the .NET 10 SDK. The
 projects are SDK-style and build both .NET Framework 4.8 and .NET 10, each into its own folder under bin; Visual
 Studio 2022 cannot build the .NET 10 half. The released exes are the 4.8 build, so they run on any Windows 10/11
-without installing .NET. Every bot builds against the GPAL package on nuget.org, version 1.1.2, which
+without installing .NET. Every bot builds against the GPAL package on nuget.org, version 1.1.3, which
 carries both builds and is restored the first time. Each bot also opens on its own through its project file.
 
 The Program link is each bot ready to run: unzip anywhere and start its exe, signed by Software Decisions, Inc.
@@ -29,7 +29,7 @@ pull requests are not accepted here. Every video: https://www.youtube.com/playli
 
 ## License
 
-Source available under the **Business Source License 1.1**, with the same Additional Use Grant as GPAL. Full terms:
+Open source under the **Apache License, Version 2.0**, the same as GPAL. Full terms:
 [LICENSE.md](./LICENSE.md). Privacy: [privacy.md](./privacy.md).
 
-Copyright (c) 2026 Software Decisions, Inc. All rights reserved.
+Copyright (c) 2026 Software Decisions, Inc.
